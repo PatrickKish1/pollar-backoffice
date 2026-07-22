@@ -21,7 +21,7 @@ function shortenAddress(address: string) {
 
 export default function DefindexPage() {
   const {
-    walletAddress,
+    wallet,
     isAuthenticated,
     openLoginModal,
     logout,
@@ -29,6 +29,7 @@ export default function DefindexPage() {
     walletBalance,
     refreshWalletBalance,
   } = usePollar();
+  const walletAddress = wallet?.address ?? null;
 
   const [vaultAddress, setVaultAddress] = useState(DEFAULT_VAULT);
   const [activeTab, setActiveTab] = useState<"deposit" | "withdraw">("deposit");
@@ -207,7 +208,7 @@ export default function DefindexPage() {
             onClick={handleCopy}
             className="rounded-xl bg-brand-tint/60 px-4 py-2 font-mono text-xs font-semibold text-brand transition-all hover:bg-brand-tint"
           >
-            {copied ? "Copied!" : shortenAddress(walletAddress)}
+            {copied ? "Copied!" : shortenAddress(walletAddress ?? "")}
           </button>
           <button
             onClick={logout}

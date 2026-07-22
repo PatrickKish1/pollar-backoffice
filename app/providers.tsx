@@ -36,8 +36,14 @@ export function Providers({ children }: { children: ReactNode }) {
   // Providing appConfig skips the remote /applications/config fetch, so the app
   // boots even before a dashboard application is fully provisioned. The SDK
   // fills any omitted UI fields with its own defaults.
+  // Pollar ^0.11 requires application.network + application.chains when supplying
+  // a local appConfig (replacement for /applications/config, not a patch).
   const appConfig: PollarConfig = {
-    application: { name: "Pollar Wallet" },
+    application: {
+      name: "Pollar Wallet",
+      network: stellarNetwork,
+      chains: ["STELLAR"],
+    },
     styles: {
       accentColor: "#0560a9",
       emailEnabled: true, // login con código por email (OTP)

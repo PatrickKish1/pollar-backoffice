@@ -40,7 +40,7 @@ const inputClass =
 export function BlendPanel() {
   const {
     isAuthenticated,
-    walletAddress,
+    wallet,
     walletBalance,
     refreshWalletBalance,
     enabledAssets,
@@ -50,6 +50,7 @@ export function BlendPanel() {
     signAndSubmitTx,
     verified,
   } = usePollar();
+  const walletAddress = wallet?.address ?? null;
 
   const network = useMemo(() => getBlendNetwork(), []);
 
@@ -129,7 +130,7 @@ export function BlendPanel() {
         usdcAsset?.issuer === asset.issuer ? usdcAsset.sponsored : false;
       const outcome = await setTrustline(
         { code: asset.code, issuer: asset.issuer },
-        { sponsored },
+        { skipSponsorship: !sponsored },
       );
       if (outcome.status === "success" || outcome.status === "pending") {
         setTrustlineMessage(null);

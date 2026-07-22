@@ -5,7 +5,8 @@ import { QRCodeSVG } from "qrcode.react";
 import { usePollar } from "@pollar/react";
 
 export function ReceiveTab() {
-  const { walletAddress } = usePollar();
+  const { wallet } = usePollar();
+  const walletAddress = wallet?.address ?? null;
   const [copied, setCopied] = useState(false);
 
   async function copy() {
