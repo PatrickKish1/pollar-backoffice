@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { usePollar } from "@pollar/react";
+import { usePollar, WalletButton } from "@pollar/react";
 import {
   buildPhoenixSwapXdr,
   discoverPools,
@@ -48,9 +48,11 @@ export default function PhoenixSwapPage() {
     wallet,
     isAuthenticated,
     openLoginModal,
-    logout,
+    openReceiveModal,
     signAndSubmitTx,
     setTrustline,
+    walletBalance,
+    refreshWalletBalance,
   } = usePollar();
   const walletAddress = wallet?.address ?? null;
 
@@ -72,6 +74,46 @@ export default function PhoenixSwapPage() {
   const [trustBusy, setTrustBusy] = useState(false);
 
   const reqId = useRef(0);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (walletBalance.step === "idle") {
+      void refreshWalletBalance();
+    }
+  }, [isAuthenticated, walletBalance.step, refreshWalletBalance]);
+
+  const balanceForToken = useCallback(
+    (token: TokenMeta): { display: string; raw: string } | null => {
+      if (walletBalance.step !== "loaded") return null;
+      const balances = walletBalance.data.balances;
+      const match = token.native
+        ? balances.find(
+            (row) =>
+              row.type === "native" ||
+              row.code === "XLM" ||
+              row.code === "native",
+          )
+        : balances.find(
+            (row) =>
+              row.code === token.code &&
+              (!token.issuer || row.issuer === token.issuer),
+          );
+      const raw = match?.available ?? match?.balance;
+      if (raw == null || raw === "") return null;
+      const numeric = Number(raw);
+      const display = Number.isFinite(numeric)
+        ? numeric.toLocaleString(undefined, {
+            maximumFractionDigits: 2,
+            minimumFractionDigits: 0,
+          })
+        : raw;
+      return { display, raw };
+    },
+    [walletBalance],
+  );
+
+  const tokenInBalance = balanceForToken(tokenIn);
+  const tokenOutBalance = balanceForToken(tokenOut);
 
   const amountIn = useMemo(() => {
     try {
@@ -112,7 +154,7 @@ export default function PhoenixSwapPage() {
 
       if (!found.length) {
         setPoolsErr(
-          "No live Phoenix pools on this RPC yet. The last public testnet factory (Soroswap Dec 2025) is stale after the network reset. Set NEXT_PUBLIC_PHOENIX_FACTORY or NEXT_PUBLIC_PHOENIX_SEED_POOLS when addresses are available — the swap path is ready.",
+          "No live Phoenix pools discovered. On mainnet the demo pool is CBHCRSVX…BIZX (XLM/USDC). Set NEXT_PUBLIC_PHOENIX_SEED_POOLS or NEXT_PUBLIC_POLLAR_NETWORK=mainnet.",
         );
       }
     } catch (error: any) {
@@ -182,21 +224,40 @@ export default function PhoenixSwapPage() {
   async function enableTrustline() {
     if (!tokenOut.code || !tokenOut.issuer || !walletAddress) return;
     setTrustBusy(true);
+    setTx({ kind: "idle" });
     try {
-      await setTrustline(
-        { code: tokenOut.code, issuer: tokenOut.issuer },
-        { skipSponsorship: true },
-      );
+      // Let Pollar sponsor when eligible. skipSponsorship:true requires the
+      // account to already exist on-chain with enough XLM for the reserve.
+      const outcome = await setTrustline({
+        code: tokenOut.code,
+        issuer: tokenOut.issuer,
+      });
+      if (outcome.status !== "success" && outcome.status !== "pending") {
+        const details = outcome.details || "Could not enable trustline";
+        const notOnNetwork = /not found on network/i.test(details);
+        setTx({
+          kind: "error",
+          message: notOnNetwork
+            ? `Account ${shortenAddress(walletAddress)} is not on Stellar mainnet yet. Fund it with a little XLM first (Receive), then enable the trustline.`
+            : details,
+        });
+        return;
+      }
       const hasLine = await hasTrustline(
         walletAddress,
         tokenOut.code,
         tokenOut.issuer,
       );
       setNeedsTrustline(!hasLine);
+      void refreshWalletBalance();
     } catch (error: any) {
+      const message = error?.message ?? "Could not enable trustline";
+      const notOnNetwork = /not found on network/i.test(message);
       setTx({
         kind: "error",
-        message: error?.message ?? "Could not enable trustline",
+        message: notOnNetwork
+          ? `Account ${shortenAddress(walletAddress)} is not on Stellar mainnet yet. Fund it with a little XLM first (Receive), then enable the trustline.`
+          : message,
       });
     } finally {
       setTrustBusy(false);
@@ -250,6 +311,7 @@ export default function PhoenixSwapPage() {
       if (outcome.status === "success" || outcome.status === "pending") {
         setTx({ kind: "success", hash: outcome.hash });
         void fetchQuote();
+        void refreshWalletBalance();
       } else {
         setTx({
           kind: "error",
@@ -303,22 +365,14 @@ export default function PhoenixSwapPage() {
           <span className="font-medium text-zinc-600">Phoenix</span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="rounded-xl bg-brand-tint/60 px-3 py-2 font-mono text-xs font-semibold text-brand">
-            {walletAddress ? shortenAddress(walletAddress) : ""}
-          </span>
-          <button
-            onClick={logout}
-            className="rounded-xl px-3 py-2 text-sm text-zinc-500 hover:bg-zinc-100"
-          >
-            Sign out
-          </button>
+          <WalletButton />
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-md flex-1 px-5 py-8">
         <h1 className="mb-1 text-2xl font-extrabold tracking-tight">Swap</h1>
         <p className="mb-5 text-sm text-zinc-500">
-          Phoenix AMM · on-chain pool discovery · live quote
+          Phoenix AMM · mainnet · live quote
           {poolsLoading ? " · loading pools…" : pools.length ? ` · ${pools.length} pools` : ""}
         </p>
 
@@ -337,6 +391,22 @@ export default function PhoenixSwapPage() {
           <div className="rounded-2xl bg-zinc-50 p-4">
             <div className="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-zinc-400">
               <span>From</span>
+              <span className="normal-case font-medium tracking-normal text-zinc-500">
+                {walletBalance.step === "loading" || walletBalance.step === "idle"
+                  ? "Balance…"
+                  : tokenInBalance
+                    ? `Balance ${tokenInBalance.display} ${tokenIn.symbol}`
+                    : `Balance — ${tokenIn.symbol}`}
+                {tokenInBalance && Number(tokenInBalance.raw) > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setAmount(tokenInBalance.raw)}
+                    className="ml-2 rounded-md bg-brand-tint/70 px-1.5 py-0.5 text-[10px] font-bold uppercase text-brand"
+                  >
+                    Max
+                  </button>
+                ) : null}
+              </span>
             </div>
             <div className="flex items-center gap-3">
               <input
@@ -376,14 +446,21 @@ export default function PhoenixSwapPage() {
           <div className="rounded-2xl bg-zinc-50 p-4">
             <div className="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-zinc-400">
               <span>To (estimated)</span>
-              {quoting && <span className="text-brand">updating…</span>}
+              <span className="flex items-center gap-2 normal-case font-medium tracking-normal text-zinc-500">
+                {quoting && <span className="text-brand">updating…</span>}
+                {walletBalance.step === "loading" || walletBalance.step === "idle"
+                  ? "Balance…"
+                  : tokenOutBalance
+                    ? `Balance ${tokenOutBalance.display} ${tokenOut.symbol}`
+                    : `Balance — ${tokenOut.symbol}`}
+              </span>
             </div>
             <div className="flex items-center gap-3">
               <div className="w-full text-2xl font-bold text-zinc-800">
                 {quote
                   ? fromBaseUnits(quote.outAmount, tokenOut.decimals).toLocaleString(
                       undefined,
-                      { maximumFractionDigits: tokenOut.decimals },
+                      { maximumFractionDigits: 2, minimumFractionDigits: 0 },
                     )
                   : "0.0"}
               </div>
@@ -420,7 +497,7 @@ export default function PhoenixSwapPage() {
               <Row label={`Min received (${slippage}% slippage)`}>
                 {fromBaseUnits(minReceived, tokenOut.decimals).toLocaleString(
                   undefined,
-                  { maximumFractionDigits: tokenOut.decimals },
+                  { maximumFractionDigits: 2, minimumFractionDigits: 0 },
                 )}{" "}
                 {tokenOut.symbol}
               </Row>
@@ -480,10 +557,19 @@ export default function PhoenixSwapPage() {
           )}
 
           {needsTrustline ? (
-            <div className="mt-5">
-              <p className="mb-2 text-xs text-zinc-500">
+            <div className="mt-5 space-y-2">
+              <p className="text-xs text-zinc-500">
                 Your wallet needs a {tokenOut.symbol} trustline to receive it.
+                If trustline fails with “account not found”, fund this address
+                with a little XLM first so it exists on mainnet.
               </p>
+              <button
+                type="button"
+                onClick={openReceiveModal}
+                className="w-full rounded-2xl border border-zinc-200 bg-white py-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
+              >
+                Receive XLM (fund account)
+              </button>
               <button
                 onClick={enableTrustline}
                 disabled={trustBusy}

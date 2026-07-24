@@ -1,17 +1,23 @@
 import {
   assetContractId,
   nativeXlmContractId,
+  NETWORK_PASSPHRASE,
   type TokenMeta,
 } from "./phoenix";
+import { Networks } from "@stellar/stellar-sdk";
 
 /**
- * Fallback demo tokens when the factory / seed pools have not been discovered
- * yet (current public Phoenix testnet factory is stale after network resets).
+ * Fallback demo tokens when pools have not been discovered yet.
  * Once pools load, the UI prefers the on-chain token set.
+ *
+ * Mainnet USDC = Circle issuer GA5ZSEJY…KZVN.
+ * Testnet USDC = Circle test issuer GBBD47IF…FLA5.
  */
 const USDC_ISSUER =
   process.env.NEXT_PUBLIC_USDC_ISSUER ??
-  "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
+  (NETWORK_PASSPHRASE === Networks.PUBLIC
+    ? "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
+    : "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5");
 
 export const XLM: TokenMeta = {
   symbol: "XLM",

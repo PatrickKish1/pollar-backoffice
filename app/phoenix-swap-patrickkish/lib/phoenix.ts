@@ -36,17 +36,23 @@ import {
 // --- Config -----------------------------------------------------------------
 
 /**
+ * Prefer `NEXT_PUBLIC_POLLAR_NETWORK` so Pollar wallet + Phoenix RPC stay aligned.
+ * Issue #28 targets **mainnet** (Phoenix has no live public testnet pools).
+ */
+const POLLAR_NETWORK =
+  process.env.NEXT_PUBLIC_POLLAR_NETWORK?.toLowerCase() ?? "testnet";
+
+/**
  * Last published Soroswap aggregator testnet factory (Dec 2025).
- * As of Jul 2026 this contract is **not** live on the current testnet reset
- * (`Storage/MissingValue`). Override with `NEXT_PUBLIC_PHOENIX_FACTORY` once
- * maintainers publish a fresh deploy, or pass seed pools via env.
+ * Dead after the testnet reset (`Contract not found`). Kept only when
+ * explicitly targeting testnet without env overrides.
  */
 export const DEFAULT_TESTNET_FACTORY =
   "CB6JW45DDEPUDUQI63AVYXD6UB72HMBGDAW7MZDZKZZIKAB7HL4LTNWO";
 
 /** Known mainnet pools (stellar.expert directory / phoenix-hub.io). */
 export const MAINNET_SEED_POOLS = [
-  "CBHCRSVX3ZZ7EGTSYMKPEFGZNWRVCSESQR3UABET4MIW52N4EVU6BIZX", // native/USDC
+  "CBHCRSVX3ZZ7EGTSYMKPEFGZNWRVCSESQR3UABET4MIW52N4EVU6BIZX", // native/USDC (demo pool)
   "CBCZGGNOEUZG4CAAE7TGTQQHETZMKUT4OIPFHHPKEUX46U4KXBBZ3GLH", // native/PHO
   "CD5XNKK3B6BEF2N7ULNHHGAMOKZ7P6456BFNIHRF4WNTEDKBRWAE7IAA", // PHO/USDC
   "CBISULYO5ZGS32WTNCBMEFCNKNSLFXCQ4Z3XHVDP4X4FLPSEALGSY3PS", // native/EURC
@@ -59,19 +65,28 @@ export const MAINNET_SEED_POOLS = [
   "CDQLKNH3725BUP4HPKQKMM7OO62FDVXVTO7RCYPID527MZHJG2F3QBJW", // USDC/VEUR
 ] as const;
 
+export const NETWORK_PASSPHRASE =
+  process.env.NEXT_PUBLIC_NETWORK_PASSPHRASE ??
+  (POLLAR_NETWORK === "mainnet" ? Networks.PUBLIC : Networks.TESTNET);
+
+const IS_MAINNET = NETWORK_PASSPHRASE === Networks.PUBLIC;
+
 export const RPC_URL =
   process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ??
-  "https://soroban-testnet.stellar.org";
-
-export const NETWORK_PASSPHRASE =
-  process.env.NEXT_PUBLIC_NETWORK_PASSPHRASE ?? Networks.TESTNET;
+  (IS_MAINNET
+    ? // `soroban.stellar.org` is docs HTML, not an RPC endpoint.
+      "https://mainnet.sorobanrpc.com"
+    : "https://soroban-testnet.stellar.org");
 
 export const HORIZON_URL =
-  process.env.NEXT_PUBLIC_HORIZON_URL ?? "https://horizon-testnet.stellar.org";
+  process.env.NEXT_PUBLIC_HORIZON_URL ??
+  (IS_MAINNET
+    ? "https://horizon.stellar.org"
+    : "https://horizon-testnet.stellar.org");
 
 export const FACTORY_ADDRESS =
   process.env.NEXT_PUBLIC_PHOENIX_FACTORY ??
-  (NETWORK_PASSPHRASE === Networks.PUBLIC ? "" : DEFAULT_TESTNET_FACTORY);
+  (IS_MAINNET ? "" : DEFAULT_TESTNET_FACTORY);
 
 /** Comma-separated pool contract ids. Overrides / supplements factory discovery. */
 export function seedPoolAddresses(): string[] {
@@ -80,7 +95,7 @@ export function seedPoolAddresses(): string[] {
     .map((entry) => entry.trim())
     .filter(Boolean);
   if (fromEnv.length) return fromEnv;
-  if (NETWORK_PASSPHRASE === Networks.PUBLIC) return [...MAINNET_SEED_POOLS];
+  if (IS_MAINNET) return [...MAINNET_SEED_POOLS];
   return [];
 }
 
@@ -416,8 +431,11 @@ export async function discoverPools(params: {
         address,
         await loadPoolInfo(address, params.from, server),
       );
-    } catch {
-      /* skip */
+    } catch (error) {
+      console.warn(
+        `[phoenix] failed to load seed pool ${address} via ${RPC_URL}`,
+        error,
+      );
     }
   }
 
@@ -514,7 +532,7 @@ export async function quoteBestSwap(params: {
   const candidates = poolsForPair(pools, params.tokenIn, params.tokenOut);
   if (!candidates.length) {
     throw new Error(
-      "No Phoenix pool for this pair. Set NEXT_PUBLIC_PHOENIX_FACTORY or NEXT_PUBLIC_PHOENIX_SEED_POOLS once a live testnet deploy is available.",
+      "No Phoenix pool for this pair. Set NEXT_PUBLIC_PHOENIX_SEED_POOLS to a live pool (mainnet demo: CBHCRSVX…BIZX XLM/USDC).",
     );
   }
 
