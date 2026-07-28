@@ -60,7 +60,10 @@ export function SendTab({ onSent }: { onSent?: () => void }) {
       selected.type === "native"
         ? { type: "native" }
         : {
-            type: selected.type,
+            type:
+              selected.code.length <= 4
+                ? "credit_alphanum4"
+                : "credit_alphanum12",
             code: selected.code,
             issuer: selected.issuer!,
           };

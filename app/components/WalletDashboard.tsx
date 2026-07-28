@@ -23,7 +23,8 @@ function shortenAddress(address: string) {
 }
 
 export function WalletDashboard() {
-  const { walletAddress, logout } = usePollar();
+  const { wallet, logout } = usePollar();
+  const walletAddress = wallet?.address ?? null;
   const [active, setActive] = useState<TabId>("balance");
   const [copied, setCopied] = useState(false);
 

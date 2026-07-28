@@ -85,8 +85,9 @@ const selectClass =
   "rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm text-zinc-900 outline-none focus:border-brand focus:ring-2 focus:ring-brand-tint flex-shrink-0";
 
 export default function SoroswapPage() {
-  const { isAuthenticated, walletAddress, verified, signAndSubmitTx, openTxHistoryModal } =
+  const { isAuthenticated, wallet, verified, signAndSubmitTx, openTxHistoryModal } =
     usePollar();
+  const walletAddress = wallet?.address ?? null;
 
   const [tokens, setTokens] = useState<Token[]>([]);
   const [baseToken, setBaseToken] = useState<Token | null>(null);

@@ -30,13 +30,14 @@ function shorten(a: string) {
 
 export default function AquariusSwapPage() {
   const {
-    walletAddress,
+    wallet,
     isAuthenticated,
     openLoginModal,
     logout,
     signAndSubmitTx,
     setTrustline,
   } = usePollar();
+  const walletAddress = wallet?.address ?? null;
 
   const [tokenIn, setTokenIn] = useState<TokenDef>(USDC);
   const [tokenOut, setTokenOut] = useState<TokenDef>(XLM);
@@ -115,7 +116,7 @@ export default function AquariusSwapPage() {
     try {
       await setTrustline(
         { code: tokenOut.code, issuer: tokenOut.issuer },
-        { sponsored: false }, // the user's own XLM covers the 0.5 reserve
+        { skipSponsorship: true }, // the user's own XLM covers the 0.5 reserve
       );
       const ok = await hasTrustline(walletAddress, tokenOut.code, tokenOut.issuer);
       setNeedsTrustline(!ok);
